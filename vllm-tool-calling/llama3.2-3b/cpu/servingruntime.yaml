@@ -5,7 +5,7 @@ metadata:
     opendatahub.io/apiProtocol: REST
     opendatahub.io/recommended-accelerators: '["cpu"]'
     opendatahub.io/template-display-name: vLLM CPU ServingRuntime for KServe
-    opendatahub.io/runtime-version: v0.7.2
+    opendatahub.io/runtime-version: v0.9.2
     opendatahub.io/template-name: vllm-xeon-runtime
     openshift.io/display-name: llama32-3b-cpu
   name: llama32-3b-cpu
@@ -36,7 +36,7 @@ spec:
       env:
         - name: HF_HOME
           value: /tmp/hf_home
-      image: 'public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo:latest'
+      image: 'quay.io/ecosystem-appeng/vllm:cpu-v0.9.2'
       name: kserve-container
       ports:
         - containerPort: 8080
