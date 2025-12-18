@@ -19,10 +19,38 @@ spec:
     minReplicas: 1
     model:
       env:
-      - name: VLLM_SKIP_WARMUP
-        value: 'false'
-      - name: VLLM_GRAPH_RESERVED_MEM
-        value: '0.25'
+        - name: EXPERIMENTAL_WEIGHT_SHARING
+          value: '0'
+        - name: PT_HPU_ENABLE_LAZY_COLLECTIVES
+          value: 'true'
+        - name: PT_HPU_LAZY_MODE
+          value: '1'
+        - name: VLLM_DECODE_BLOCK_BUCKET_MAX
+          value: '41280'
+        - name: VLLM_DECODE_BLOCK_BUCKET_STEP
+          value: '256'
+        - name: VLLM_DECODE_BS_BUCKET_STEP
+          value: '32'
+        - name: VLLM_DELAYED_SAMPLING
+          value: 'true'
+        - name: VLLM_EXPONENTIAL_BUCKETING
+          value: 'false'
+        - name: VLLM_GRAPH_PROMPT_RATIO
+          value: '0.6'
+        - name: VLLM_GRAPH_RESERVED_MEM
+          value: '0.06'
+        - name: VLLM_PROMPT_BS_BUCKET_STEP
+          value: '32'
+        - name: VLLM_PROMPT_SEQ_BUCKET_MAX
+          value: '33024'
+        - name: VLLM_PROMPT_SEQ_BUCKET_STEP
+          value: '256'
+        - name: VLLM_PROMPT_USE_FUSEDSDPA
+          value: '1'
+        - name: HF_HUB_DISABLE_XET
+          value: '1'
+        - name: VLLM_SKIP_WARMUP
+          value: 'false'
       modelFormat:
         name: vLLM
       name: ''

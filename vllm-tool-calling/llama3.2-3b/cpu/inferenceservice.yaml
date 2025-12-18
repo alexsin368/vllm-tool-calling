@@ -15,12 +15,31 @@ spec:
       modelFormat:
         name: vLLM
       name: ''
+      env:
+        - name: VLLM_CACHE_DIR
+          value: "/tmp/vllm_cache"
+        - name: XDG_CACHE_HOME
+          value: "/tmp/.cache"
+        - name: VLLM_CPU_KVCACHE_SPACE
+          value: "40"
+        - name: VLLM_RPC_TIMEOUT
+          value: "100000"
+        - name: VLLM_ALLOW_LONG_MAX_MODEL_LEN
+          value: "1"
+        - name: VLLM_ENGINE_ITERATION_TIMEOUT_S
+          value: "120"
+        - name: VLLM_CPU_NUM_OF_RESERVED_CPU
+          value: "0"
+        - name: VLLM_CPU_SGL_KERNEL
+          value: "1"
+        - name: HF_HUB_DISABLE_XET
+          value: "1"
       resources:
         limits:
-          cpu: '8'
+          cpu: '16'
           memory: 24Gi
         requests:
-          cpu: '4'
+          cpu: '8'
           memory: 12Gi
       runtime: llama32-3b-cpu
       storageUri: 'oci://quay.io/redhat-ai-services/modelcar-catalog:llama-3.2-3b-instruct'
