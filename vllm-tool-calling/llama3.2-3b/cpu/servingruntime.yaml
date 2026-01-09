@@ -30,12 +30,11 @@ spec:
         - '--enforce-eager'
         - '--max-num-batched-tokens=2048'
         - '--max-num-seqs=256'
-        - '--tensor-parallel-size=2'
+        - '--tensor-parallel-size=1'
         - '--pipeline-parallel-size=1'
       command:
-        - python
-        - '-m'
-        - vllm.entrypoints.openai.api_server
+        - vllm
+        - serve
       env:
         - name: HF_HOME
           value: "/tmp/hf_home"
