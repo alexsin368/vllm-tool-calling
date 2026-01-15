@@ -26,8 +26,6 @@ spec:
         - '--dtype=bfloat16'
         - '--max-model-len=8192'
         - '--distributed-executor-backend=mp'
-        - '--enable-chunked-prefill'
-        - '--enforce-eager'
         - '--max-num-batched-tokens=2048'
         - '--max-num-seqs=256'
         - '--tensor-parallel-size=1'

@@ -24,16 +24,14 @@ spec:
           value: '1'
         - name: VLLM_ENGINE_ITERATION_TIMEOUT_S
           value: '120'
-        - name: VLLM_CPU_NUM_OF_RESERVED_CPU
-          value: '0'
         - name: HF_HUB_DISABLE_XET
           value: '1'
         - name: VLLM_CPU_SGL_KERNEL
           value: '1'
       resources:
         limits:
-          cpu: '8'
-          memory: 64Gi
+          cpu: '4'
+          memory: 16Gi
         requests:
           cpu: '4'
           memory: 16Gi
