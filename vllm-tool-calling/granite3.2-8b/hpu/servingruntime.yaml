@@ -16,29 +16,98 @@ spec:
     prometheus.io/path: /metrics
     prometheus.io/port: '8080'
   containers:
-    - args:
-        - '--port=8080'
-        - '--model=/mnt/models'
-        - '--served-model-name={{.Name}}'
-        - '--enable-auto-tool-choice'
-        - '--tool-call-parser=granite'
-        - '--chat-template=/app/data/template/tool_chat_template_granite.jinja'
-        - '--block-size=128'
-        - '--dtype=bfloat16'
-        - '--max-model-len=33024'
-        - '--gpu-memory-util=0.99'
-        - '--max-num-seqs=160'
-        - '--max-num-prefill-seqs=16'
-        - '--num-scheduler-steps=1'
-        - '--use-padding-aware-scheduling'
-        - '--tensor-parallel-size=1'
+    - args: []
       command:
-        - python
-        - '-m'
-        - vllm.entrypoints.openai.api_server
+        - sh
+        - -c
+        - |
+          set -e
+          cd /tmp
+          git clone https://github.com/vllm-project/vllm-gaudi.git
+          cd /tmp/vllm-gaudi/.cd/server
+          
+          python << 'PYTHON_EOF'
+          import sys
+          sys.path.insert(0, '/tmp/vllm-gaudi/.cd/')
+          
+          from server.vllm_autocalc import VarsGenerator
+          
+          # Initialize with absolute file paths
+          vars_gen = VarsGenerator(
+              defaults_path="/tmp/vllm-gaudi/.cd/server/server_defaults.yaml",
+              varlist_conf_path="/tmp/vllm-gaudi/.cd/server/server_user.env",
+              model_def_settings_path="/tmp/vllm-gaudi/.cd/server/settings_vllm.csv"
+          )
+          
+          # Calculate and get variables
+          context = vars_gen.calculate_variables()
+
+          # Override or set specific values
+          context['MAX_NUM_BATCHED_TOKENS'] = max(context['MAX_NUM_BATCHED_TOKENS'], context['MAX_MODEL_LEN'])
+          
+          print("=== ALL GENERATED VARIABLES ===")
+          for key, value in sorted(context.items()):
+              print(f"{key}: {value} (type: {type(value).__name__})")
+          print("================================")
+          
+          # vLLM api_server recognized arguments (lowercase with hyphens)
+          vllm_args = {
+              'block-size', 'dtype', 'max-model-len', 'gpu-memory-utilization', 'max-num-seqs',
+              'max-num-prefill-seqs', 'num-scheduler-steps', 'use-padding-aware-scheduling',
+              'tensor-parallel-size', 'max-num-batched-tokens'
+          }
+
+          args_list = []
+          env_vars = {}
+          
+          for key, value in context.items():
+              # Convert to lowercase and replace underscores with hyphens
+              arg_key = key.lower().replace('_', '-')
+              
+              # Skip complex types and None values
+              if isinstance(value, (dict, list)) or value is None:
+                  continue
+              
+              # Check if it should be a vLLM argument
+              if arg_key in vllm_args:
+                  if isinstance(value, bool):
+                      if value:
+                          args_list.append(f'--{arg_key}')
+                  else:
+                      args_list.append(f'--{arg_key}={value}')
+              # Everything else: store as environment variable (uppercase original key)
+              else:
+                  if not isinstance(value, (dict, list)):
+                      env_vars[key] = str(value)
+
+          with open('/config/vllm_autocalc_output.txt', 'w') as f:
+              f.write(' '.join(args_list))
+          
+          with open('/config/env_vars.txt', 'w') as f:
+              for k, v in env_vars.items():
+                  f.write(f"export {k}={v}\n")
+
+          print(f"\n=== vLLM ARGS ===")
+          print(f"Generated vLLM args: {' '.join(args_list)}")
+          print(f"\n=== ENV VARS ===")
+          for k, v in env_vars.items():
+              print(f"{k}={v}")
+          PYTHON_EOF
+          
+          source /config/env_vars.txt
+          exec python -m vllm.entrypoints.openai.api_server \
+            --port=8080 \
+            --model=/mnt/models \
+            --served-model-name={{.Name}} \
+            --enable-auto-tool-choice \
+            --tool-call-parser=granite \
+            --chat-template=/app/data/template/tool_chat_template_granite.jinja \
+            $(cat /config/vllm_autocalc_output.txt)
       env:
         - name: HF_HOME
           value: "/tmp/hf_home"
+        - name: MODEL
+          value: "ibm-granite/granite-8b-code-instruct-4k"
       image: 'quay.io/modh/vllm:vllm-gaudi-v2-25-on-push-n7985-build-images'
       name: kserve-container
       ports:
@@ -47,6 +116,8 @@ spec:
       volumeMounts:
         - mountPath: /dev/shm
           name: shm
+        - mountPath: /config
+          name: generated-config
   multiModel: false
   supportedModelFormats:
     - autoSelect: true
@@ -56,3 +127,5 @@ spec:
         medium: Memory
         sizeLimit: 2Gi
       name: shm
+    - emptyDir: {}
+      name: generated-config
