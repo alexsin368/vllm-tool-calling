@@ -22,79 +22,28 @@ spec:
         - -c
         - |
           set -e
-          cd /tmp
-          git clone https://github.com/vllm-project/vllm-gaudi.git
-          cd /tmp/vllm-gaudi/.cd/server
           
-          python << 'PYTHON_EOF'
-          import sys
-          sys.path.insert(0, '/tmp/vllm-gaudi/.cd/')
+          echo "=== Starting vLLM API Server ==="
           
-          from server.vllm_autocalc import VarsGenerator
+          # Check if generated config files exist
+          if [ ! -f /config/vllm_autocalc_output.txt ]; then
+            echo "ERROR: vllm_autocalc_output.txt not found in /config"
+            exit 1
+          fi
           
-          # Initialize with absolute file paths
-          vars_gen = VarsGenerator(
-              defaults_path="/tmp/vllm-gaudi/.cd/server/server_defaults.yaml",
-              varlist_conf_path="/tmp/vllm-gaudi/.cd/server/server_user.env",
-              model_def_settings_path="/tmp/vllm-gaudi/.cd/server/settings_vllm.csv"
-          )
+          if [ ! -f /config/env_vars.txt ]; then
+            echo "ERROR: env_vars.txt not found in /config"
+            exit 1
+          fi
           
-          # Calculate and get variables
-          context = vars_gen.calculate_variables()
-
-          # Override or set specific values
-          context['MAX_NUM_BATCHED_TOKENS'] = max(context['MAX_NUM_BATCHED_TOKENS'], context['MAX_MODEL_LEN'])
-          
-          print("=== ALL GENERATED VARIABLES ===")
-          for key, value in sorted(context.items()):
-              print(f"{key}: {value} (type: {type(value).__name__})")
-          print("================================")
-          
-          # vLLM api_server recognized arguments (lowercase with hyphens)
-          vllm_args = {
-              'block-size', 'dtype', 'max-model-len', 'gpu-memory-utilization', 'max-num-seqs',
-              'max-num-prefill-seqs', 'num-scheduler-steps', 'use-padding-aware-scheduling',
-              'tensor-parallel-size', 'max-num-batched-tokens'
-          }
-
-          args_list = []
-          env_vars = {}
-          
-          for key, value in context.items():
-              # Convert to lowercase and replace underscores with hyphens
-              arg_key = key.lower().replace('_', '-')
-              
-              # Skip complex types and None values
-              if isinstance(value, (dict, list)) or value is None:
-                  continue
-              
-              # Check if it should be a vLLM argument
-              if arg_key in vllm_args:
-                  if isinstance(value, bool):
-                      if value:
-                          args_list.append(f'--{arg_key}')
-                  else:
-                      args_list.append(f'--{arg_key}={value}')
-              # Everything else: store as environment variable (uppercase original key)
-              else:
-                  if not isinstance(value, (dict, list)):
-                      env_vars[key] = str(value)
-
-          with open('/config/vllm_autocalc_output.txt', 'w') as f:
-              f.write(' '.join(args_list))
-          
-          with open('/config/env_vars.txt', 'w') as f:
-              for k, v in env_vars.items():
-                  f.write(f"export {k}={v}\n")
-
-          print(f"\n=== vLLM ARGS ===")
-          print(f"Generated vLLM args: {' '.join(args_list)}")
-          print(f"\n=== ENV VARS ===")
-          for k, v in env_vars.items():
-              print(f"{k}={v}")
-          PYTHON_EOF
-          
+          # Source generated environment variables
           source /config/env_vars.txt
+          
+          echo "Generated vLLM arguments:"
+          cat /config/vllm_autocalc_output.txt
+          echo ""
+          
+          # Start vLLM API server with generated and hardcoded arguments
           exec python -m vllm.entrypoints.openai.api_server \
             --port=8080 \
             --model=/mnt/models \
@@ -118,6 +67,10 @@ spec:
           name: shm
         - mountPath: /config
           name: generated-config
+          readOnly: true
+        - mountPath: /scripts
+          name: autocalc-script
+          readOnly: true
   multiModel: false
   supportedModelFormats:
     - autoSelect: true
@@ -129,3 +82,7 @@ spec:
       name: shm
     - emptyDir: {}
       name: generated-config
+    - configMap:
+        name: vllm-gaudi-autocalc-script
+        defaultMode: 0755
+      name: autocalc-script
