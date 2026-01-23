@@ -16,31 +16,48 @@ spec:
     prometheus.io/path: /metrics
     prometheus.io/port: '8080'
   containers:
-    - args:
-        - '--port=8080'
-        - '--model=/mnt/models'
-        - '--served-model-name={{.Name}}'
-        - '--enable-auto-tool-choice'
-        - '--tool-call-parser'
-        - granite
-        - '--chat-template'
-        - /app/data/template/tool_chat_template_granite.jinja
-        - '--max-model-len'
-        - '128000'
-        - '--gpu-memory-utilization'
-        - '0.85'
-        - '--block-size'
-        - '128'
-        - '--dtype'
-        - 'bfloat16'     
+    - args: []
       command:
-        - python
-        - '-m'
-        - vllm.entrypoints.openai.api_server
+        - sh
+        - -c
+        - |
+          set -e
+          
+          echo "=== Starting vLLM API Server ==="
+          
+          # Check if generated config files exist
+          if [ ! -f /config/vllm_autocalc_output.txt ]; then
+            echo "ERROR: vllm_autocalc_output.txt not found in /config"
+            exit 1
+          fi
+          
+          if [ ! -f /config/env_vars.txt ]; then
+            echo "ERROR: env_vars.txt not found in /config"
+            exit 1
+          fi
+          
+          # Source generated environment variables
+          source /config/env_vars.txt
+          
+          echo "Generated vLLM arguments:"
+          cat /config/vllm_autocalc_output.txt
+          echo ""
+          
+          # Start vLLM API server with generated and hardcoded arguments
+          exec python -m vllm.entrypoints.openai.api_server \
+            --port=8080 \
+            --model=/mnt/models \
+            --served-model-name={{.Name}} \
+            --enable-auto-tool-choice \
+            --tool-call-parser=granite \
+            --chat-template=/app/data/template/tool_chat_template_granite.jinja \
+            $(cat /config/vllm_autocalc_output.txt)
       env:
         - name: HF_HOME
-          value: /tmp/hf_home
-      image: 'quay.io/modh/vllm@sha256:af6a071be36d8a99476f145d1589d7ede97d2760b93335b14ca26de7417e438c'
+          value: "/tmp/hf_home"
+        - name: MODEL
+          value: "ibm-granite/granite-8b-code-instruct-4k"
+      image: 'quay.io/modh/vllm:vllm-gaudi-v2-25-on-push-n7985-build-images'
       name: kserve-container
       ports:
         - containerPort: 8080
@@ -48,6 +65,12 @@ spec:
       volumeMounts:
         - mountPath: /dev/shm
           name: shm
+        - mountPath: /config
+          name: generated-config
+          readOnly: true
+        - mountPath: /scripts
+          name: autocalc-script
+          readOnly: true
   multiModel: false
   supportedModelFormats:
     - autoSelect: true
@@ -57,3 +80,9 @@ spec:
         medium: Memory
         sizeLimit: 2Gi
       name: shm
+    - emptyDir: {}
+      name: generated-config
+    - configMap:
+        name: vllm-gaudi-autocalc-script
+        defaultMode: 0755
+      name: autocalc-script

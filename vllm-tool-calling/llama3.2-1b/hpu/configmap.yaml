@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-gaudi-autocalc-script
+data:
+  vllm-gaudi-autocalc.sh: |
+    #!/bin/bash
+
+    set -e
+
+    # Set paths
+    VLLM_GAUDI_PATH="${1:-.}"
+    VLLM_ARGS_OUTPUT="${2:-/config/vllm_autocalc_output.txt}"
+    ENV_VARS_OUTPUT="${3:-/config/env_vars.txt}"
+    
+    # Export for Python subprocess
+    export VLLM_ARGS_OUTPUT
+    export ENV_VARS_OUTPUT
+    
+    echo "Starting vLLM autocalc initialization..."
+    echo "VLLM_GAUDI_PATH: $VLLM_GAUDI_PATH"
+    echo "VLLM_ARGS_OUTPUT: $VLLM_ARGS_OUTPUT"
+    echo "ENV_VARS_OUTPUT: $ENV_VARS_OUTPUT"
+    
+    if [ ! -d "$VLLM_GAUDI_PATH" ]; then
+        echo "ERROR: VLLM_GAUDI_PATH directory not found: $VLLM_GAUDI_PATH"
+        exit 1
+    fi
+    
+    if [ ! -d "$VLLM_GAUDI_PATH/.cd/server" ]; then
+        echo "ERROR: .cd/server directory not found in $VLLM_GAUDI_PATH"
+        exit 1
+    fi
+
+    cd "${VLLM_GAUDI_PATH}/.cd/server"
+
+    python << 'PYTHON_EOF'
+    import sys
+    import os
+    vllm_gaudi_path = os.environ.get('VLLM_GAUDI_PATH', '/tmp/vllm-gaudi')
+    sys.path.insert(0, os.path.join(vllm_gaudi_path, '.cd'))
+    
+    from server.vllm_autocalc import VarsGenerator
+
+    # Initialize with absolute file paths
+    vars_gen = VarsGenerator(
+        defaults_path=f"{os.environ.get('VLLM_GAUDI_PATH', '/tmp/vllm-gaudi')}/.cd/server/server_defaults.yaml",
+        varlist_conf_path=f"{os.environ.get('VLLM_GAUDI_PATH', '/tmp/vllm-gaudi')}/.cd/server/server_user.env",
+        model_def_settings_path=f"{os.environ.get('VLLM_GAUDI_PATH', '/tmp/vllm-gaudi')}/.cd/server/settings_vllm.csv"
+    )
+
+    # Calculate and get variables
+    context = vars_gen.calculate_variables()
+
+    # Override or set specific values
+    context['MAX_NUM_BATCHED_TOKENS'] = max(context['MAX_NUM_BATCHED_TOKENS'], context['MAX_MODEL_LEN'])
+
+    print("=== ALL GENERATED VARIABLES ===")
+    for key, value in sorted(context.items()):
+        print(f"{key}: {value} (type: {type(value).__name__})")
+    print("================================")
+
+    # vLLM api_server recognized arguments (lowercase with hyphens)
+    vllm_args = {
+        'block-size', 'dtype', 'max-model-len', 'gpu-memory-utilization', 'max-num-seqs',
+        'max-num-prefill-seqs', 'num-scheduler-steps', 'use-padding-aware-scheduling',
+        'tensor-parallel-size', 'max-num-batched-tokens'
+    }
+
+    args_list = []
+    env_vars = {}
+
+    for key, value in context.items():
+        # Convert to lowercase and replace underscores with hyphens
+        arg_key = key.lower().replace('_', '-')
+        
+        # Skip complex types and None values
+        if isinstance(value, (dict, list)) or value is None:
+            continue
+        
+        # Check if it should be a vLLM argument
+        if arg_key in vllm_args:
+            if isinstance(value, bool):
+                if value:
+                    args_list.append(f'--{arg_key}')
+            else:
+                args_list.append(f'--{arg_key}={value}')
+        # Everything else: store as environment variable (uppercase original key)
+        else:
+            if not isinstance(value, (dict, list)):
+                env_vars[key] = str(value)
+
+    # Get output paths from environment variables (set by bash wrapper)
+    vllm_args_output = os.environ.get('VLLM_ARGS_OUTPUT', '/config/vllm_autocalc_output.txt')
+    env_vars_output = os.environ.get('ENV_VARS_OUTPUT', '/config/env_vars.txt')
+
+    with open(vllm_args_output, 'w') as f:
+        f.write(' '.join(args_list))
+
+    with open(env_vars_output, 'w') as f:
+        for k, v in env_vars.items():
+            f.write(f"export {k}={v}\n")
+
+    print(f"\n=== vLLM ARGS ===")
+    print(f"Generated vLLM args: {' '.join(args_list)}")
+    print(f"\n=== ENV VARS ===")
+    for k, v in env_vars.items():
+        print(f"{k}={v}")
+    PYTHON_EOF
+
+    echo "vLLM autocalc initialization completed successfully"

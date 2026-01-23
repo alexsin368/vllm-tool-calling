@@ -6,6 +6,10 @@ metadata:
     serving.knative.openshift.io/enablePassthrough: 'true'
     sidecar.istio.io/inject: 'true'
     sidecar.istio.io/rewriteAppHTTPProbers: 'true'
+    proxy.istio.io/config: |
+      proxyMetadata:
+        ISTIO_META_DNS_CAPTURE: "false"
+    traffic.sidecar.istio.io/excludeOutboundPorts: "443,80"
   name: granite32-8b-hpu
   finalizers:
     - inferenceservice.finalizers
@@ -14,15 +18,85 @@ metadata:
 spec:
   predictor:
     annotations:
-      serving.knative.dev/progress-deadline: 60m  
+      serving.knative.dev/progress-deadline: 120m  
+      serving.knative.dev/initContainerTimeout: 30m
     maxReplicas: 1
     minReplicas: 1
+    initContainers:
+      - name: vllm-autocalc-init
+        image: 'quay.io/modh/vllm:vllm-gaudi-v2-25-on-push-n7985-build-images'
+        command:
+          - sh
+          - -c
+          - |
+            set -e
+            
+            echo "=== Starting vLLM Gaudi init container ==="
+            cd /tmp
+            
+            # Git clone with timeout
+            echo "Cloning vllm-gaudi repository with 10 minute timeout..."
+            timeout 600 git clone --depth 1 https://github.com/vllm-project/vllm-gaudi.git || {
+              echo "ERROR: Failed to clone repository"
+              exit 1
+            }
+            
+            # Execute the autocalc script from ConfigMap
+            echo "Executing autocalc script..."
+            export VLLM_GAUDI_PATH=/tmp/vllm-gaudi
+
+            if [ ! -f /scripts/vllm-gaudi-autocalc.sh ]; then
+              echo "ERROR: autocalc script not found at /scripts/vllm-gaudi-autocalc.sh"
+              exit 1
+            fi
+            
+            /scripts/vllm-gaudi-autocalc.sh /tmp/vllm-gaudi || {
+              echo "ERROR: autocalc script failed"
+              exit 1
+            }
+            
+            # Verify output files were created
+            if [ ! -f /config/vllm_autocalc_output.txt ]; then
+              echo "ERROR: vllm_autocalc_output.txt was not created"
+              exit 1
+            fi
+            
+            if [ ! -f /config/env_vars.txt ]; then
+              echo "ERROR: env_vars.txt was not created"
+              exit 1
+            fi
+            
+            echo "=== Init container completed successfully ==="
+            echo "Generated vLLM arguments:"
+            cat /config/vllm_autocalc_output.txt
+            echo ""
+            echo "Generated environment variables:"
+            cat /config/env_vars.txt
+        env:
+          - name: HF_HOME
+            value: "/tmp/hf_home"
+          - name: MODEL
+            value: "ibm-granite/granite-8b-code-instruct-4k"
+        volumeMounts:
+          - mountPath: /config
+            name: generated-config
+            readOnly: false
+          - mountPath: /scripts
+            name: autocalc-script
+            readOnly: true
+        resources:
+          requests:
+            cpu: '2'
+            memory: 4Gi
+            habana.ai/gaudi: '1'
+          limits:
+            cpu: '4'
+            memory: 8Gi
+            habana.ai/gaudi: '1'
     model:
       env:
-      - name: VLLM_SKIP_WARMUP
-        value: 'false'
-      - name: VLLM_GRAPH_RESERVED_MEM
-        value: '0.25'
+        - name: HF_HOME
+          value: /tmp/hf_home
       modelFormat:
         name: vLLM
       name: ''
@@ -37,3 +111,23 @@ spec:
           habana.ai/gaudi: '1'
       runtime: granite32-8b-hpu
       storageUri: 'oci://quay.io/redhat-ai-services/modelcar-catalog:granite-3.2-8b-instruct'
+      volumeMounts:
+        - mountPath: /dev/shm
+          name: shm
+        - mountPath: /scripts
+          name: autocalc-script
+          readOnly: true
+        - mountPath: /config
+          name: generated-config
+          readOnly: true
+    volumes:
+      - emptyDir:
+          medium: Memory
+          sizeLimit: 2Gi
+        name: shm
+      - emptyDir: {}
+        name: generated-config
+      - configMap:
+          name: vllm-gaudi-autocalc-script
+          defaultMode: 0755
+        name: autocalc-script

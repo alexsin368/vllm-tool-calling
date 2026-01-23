@@ -59,7 +59,7 @@ NOTE: To find more patterns and pre-built ModelCar images, take a look at the [R
 
 ### Minimum hardware requirements
 
-- 8+ vCPUs
+- 8+ vCPUs with 4th Gen Intel® Xeon® Scalable processors or newer
 - 24+ GiB RAM
 - Storage: 30Gi minimum in PVC (larger models may require more)
 
@@ -98,7 +98,7 @@ git clone https://github.com/rh-ai-quickstart/vllm-tool-calling.git && \
 ```bash
 export PROJECT="vllm-tool-calling-demo"
 
-oc new-project ${PROJECT}
+oc new-project $PROJECT
 ```
 
 Specify your LLM and device:
@@ -111,13 +111,9 @@ export MODEL="granite3.2-8b"
 export DEVICE="gpu"
 ```
 
-Update the following files in the `vllm-tool-calling/${MODEL}/${DEVICE}` folder if `PROJECT` is different from `vllm-tool-calling-demo`. The `namespace` field must match EXACTLY with the value of `PROJECT` set in the previous step to ensure the model is deployed in the proper namespace.
-- `kustomization.yaml`
-- (For running on CPU only) `chat-template-configmap.yaml`
-
 Deploy the LLM on the target hardware:
 ```bash
-oc apply -k vllm-tool-calling/${MODEL}/${DEVICE}
+oc apply -n $PROJECT -k vllm-tool-calling/$MODEL/$DEVICE
 ```
 
 
@@ -132,3 +128,16 @@ oc apply -k vllm-tool-calling/${MODEL}/${DEVICE}
 * Check the models deployed, and wait until you get the green tick in the Status, meaning that the model is deployed successfully:
 
 ![OpenShift AI Projects](assets/images/rhoai-2.png)
+
+
+### Cleanup
+
+To remove all deployed components:
+```bash
+oc delete -n $PROJECT -f vllm-tool-calling/$MODEL/$DEVICE
+```
+
+Delete the project:
+```bash
+oc delete project $PROJECT
+```
