@@ -112,19 +112,54 @@ Deploy the LLM on the target hardware:
 oc apply -n $PROJECT -k vllm-tool-calling/$MODEL/$DEVICE
 ```
 
-
 ### Check the deployment
 
-* From the OpenShift Console, go to the App Switcher / Waffle and go to the Red Hat OpenShift AI Console.
+* From the OpenShift Console, go to the App Switcher / Waffle in the upper right and go to the Red Hat OpenShift AI Dashboard.
 
-* Once inside the dashboard, navigate to Data Science Projects -> vllm-tool-calling-demo (or what you called your ${PROJECT} if you changed from default):
+* Once inside the dashboard, navigate to Data Science Projects or Projects -> vllm-tool-calling-demo (or the values of ${PROJECT} if changed from the default):
 
 ![OpenShift AI Projects](assets/images/rhoai-1.png)
 
-* Check the models deployed, and wait until you get the green tick in the Status, meaning that the model is deployed successfully:
+* Check the models deployed, and wait for the green tick in the Status, meaning that the model is deployed successfully:
 
 ![OpenShift AI Projects](assets/images/rhoai-2.png)
 
+> **Important:** Note down the **URL of the inference endpoint** and **resource name of the model deployment**. They will be used in the function calling section.
+
+![OpenShift AI Projects](assets/images/rhoai-3.png)
+
+![OpenShift AI Projects](assets/images/rhoai-4.png)
+
+
+Alternatively, the model status can be checked using OC client:
+```bash
+oc get pods
+oc logs -f <model-name-device-predictor-pod>
+```
+Look for `Application startup complete.`
+
+### Function Calling in OpenShift AI
+Now that the model is deployed, it can be used with function calling. The notebook from [github.com/rh-aiservices-bu/llm-on-openshift](https://github.com/rh-aiservices-bu/llm-on-openshift/blob/main/examples/notebooks/langchain/Langchain-FunctionCalling.ipynb) is used for this example.
+
+Inside the OpenShift AI Dashboard, go to Data Science Projects or Projects -> vllm-tool-calling-demo (or the values of ${PROJECT} if changed from the default) -> Workbenches. Create a workbench based on the hardware platform used. When it is in the `Running` state, click on the name of the workbench to open the Jupyter environment.
+
+![OpenShift AI Projects](assets/images/rhoai-4.1.png)
+
+In the Launcher, open a Terminal. Clone the rh-aiservices-bu repo:
+```bash
+git clone https://github.com/rh-aiservices-bu/llm-on-openshift.git
+```
+
+On the left-hand side, navigate to rh-aiservices-bu/llm-on-openshift/examples/notebooks/langchain. Open the Langchain-FunctionCalling.ipynb notebook.
+
+![OpenShift AI Projects](assets/images/rhoai-7.png)
+
+Execute the first few cells. In section 3 Model Configuration, set the following variables depending on the model deployed:
+- **INFERENCE_SERVER_URL**: the inference endpoint noted down AND append `:8080` since that is the default port for vLLM
+- **MODEL_NAME**: the model deployment name noted down
+- **API_KEY**: set to `"EMPTY"`
+
+Continue running the rest of the notebook to invoke tools. The `query` can also be customized.
 
 ### Cleanup
 
