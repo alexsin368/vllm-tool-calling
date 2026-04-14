@@ -124,7 +124,7 @@ oc apply -n $PROJECT -k vllm-tool-calling/$MODEL/$DEVICE
 
 ![OpenShift AI Projects](assets/images/rhoai-2.png)
 
-> **Important:** Note down the **URL of the inference endpoint** and **resource name of the model deployment**. They will be used in the function calling section.
+* **Important:** Note down the **URL of the inference endpoint** and **resource name of the model deployment**. They will be used in the function calling section.
 
 ![OpenShift AI Projects](assets/images/rhoai-3.png)
 
