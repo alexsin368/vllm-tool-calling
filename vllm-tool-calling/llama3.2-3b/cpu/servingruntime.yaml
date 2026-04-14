@@ -36,7 +36,7 @@ spec:
       env:
         - name: HF_HOME
           value: "/tmp/hf_home"
-      image: 'opea/vllm-cpu-ubi:v0.12.0-ubi9'
+      image: 'quay.io/vllm/automation-vllm:0.18.0rc1.dev7_rhaiv.0.ge974742fb.cpu'
       name: kserve-container
       ports:
         - containerPort: 8080

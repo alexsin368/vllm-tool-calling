@@ -39,10 +39,6 @@ It’s designed for environments where you want to:
 
 Use this project to quickly spin up a powerful vLLM instance ready for function-enabled Agents or AI applications.
 
-### See it in action
-
-Red Hat uses Arcade software to create interactive demos. Check out [Function Calling Quickstart Example](TBD) to see it live.
-
 ### Architecture diagrams
 
 ![architecture.png](assets/images/architecture.png)
